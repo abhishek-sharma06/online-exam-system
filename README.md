@@ -1,3 +1,6 @@
+# online-exam-system
+monitors candidates by recording violations and disqualifies if done
+
 # Exam System — Simple Guide
 
 This is a small website to give and take online exams. It is written in PHP and made to run on a local server like XAMPP. This guide uses very easy words so anyone can understand — even a 5th grader.
