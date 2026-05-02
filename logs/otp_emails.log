@@ -1,0 +1,16 @@
+{
+    "to": "johntest456@test.com",
+    "subject": "Email Verification - ExamSystem Pro",
+    "otp": "291138",
+    "user": "John Test User",
+    "timestamp": "2026-05-02 20:11:34"
+}
+==================================================
+{
+    "to": "abhisheksharmam6@gmail.com",
+    "subject": "Email Verification - ExamSystem Pro",
+    "otp": "055706",
+    "user": "abhi",
+    "timestamp": "2026-05-02 20:24:12"
+}
+==================================================

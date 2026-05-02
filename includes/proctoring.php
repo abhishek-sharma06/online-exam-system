@@ -108,12 +108,16 @@ class Proctoring {
 
     public function saveCapture($exam_id, $user_id, $image_data, $type = 'camera') {
         try {
-            $image_data = preg_replace('#^data:image/[^;]+;base64,#', '', $image_data);
-            $image_data = str_replace(' ', '+', $image_data);
-            $image_binary = base64_decode($image_data);
+            // If this is a screen recording, handle separately below. Only decode image data for image types.
+            $image_binary = null;
+            if ($type !== 'screen_recording') {
+                $image_data = preg_replace('#^data:image/[^;]+;base64,#', '', $image_data);
+                $image_data = str_replace(' ', '+', $image_data);
+                $image_binary = base64_decode($image_data);
 
-            if (!$image_binary) {
-                return ['success' => false, 'error' => 'Invalid image data'];
+                if (!$image_binary) {
+                    return ['success' => false, 'error' => 'Invalid image data'];
+                }
             }
 
             $timestamp = time();
@@ -124,6 +128,31 @@ class Proctoring {
                 $upload_dir = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'screenshots' . DIRECTORY_SEPARATOR;
                 $db_table = 'screenshot_captures';
                 $db_path_prefix = 'assets/uploads/screenshots/';
+            } else if ($type === 'screen_recording') {
+                // video/webm base64 data URI
+                $video_data = preg_replace('#^data:video/[^;]+;base64,#', '', $image_data);
+                $video_data = str_replace(' ', '+', $video_data);
+                $video_binary = base64_decode($video_data);
+                if (!$video_binary) {
+                    return ['success' => false, 'error' => 'Invalid video data'];
+                }
+                $filename = "screen_{$exam_id}_{$user_id}_{$timestamp}_{$rand}.webm";
+                $upload_dir = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'screen_recordings' . DIRECTORY_SEPARATOR;
+                $db_table = null; // not storing in DB table for now
+                $db_path_prefix = 'assets/uploads/screen_recordings/';
+                // Ensure directories
+                $parent_dir = dirname($upload_dir);
+                if (!is_dir($parent_dir)) { @mkdir($parent_dir, 0777, true); }
+                if (!is_dir($upload_dir)) { @mkdir($upload_dir, 0777, true); }
+
+                $filepath = $upload_dir . $filename;
+                $db_path = $db_path_prefix . $filename;
+
+                if (file_put_contents($filepath, $video_binary) !== false) {
+                    error_log("✓ screen recording saved: {$db_path}");
+                    return ['success' => true, 'filename' => $filename, 'path' => $db_path, 'type' => $type];
+                }
+                return ['success' => false, 'error' => 'Failed to save recording'];
             } else {
                 $filename = "capture_{$exam_id}_{$user_id}_{$timestamp}_{$rand}.jpg";
                 $upload_dir = __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'webcam_captures' . DIRECTORY_SEPARATOR;
@@ -144,10 +173,11 @@ class Proctoring {
             $db_path = $db_path_prefix . $filename;
 
             if (file_put_contents($filepath, $image_binary) !== false) {
-                $query = "INSERT INTO {$db_table} (exam_id, user_id, image_path, captured_at) VALUES (?, ?, ?, NOW())";
-                $stmt = $this->conn->prepare($query);
-                $stmt->execute([$exam_id, $user_id, $db_path]);
-                
+                if ($db_table) {
+                    $query = "INSERT INTO {$db_table} (exam_id, user_id, image_path, captured_at) VALUES (?, ?, ?, NOW())";
+                    $stmt = $this->conn->prepare($query);
+                    $stmt->execute([$exam_id, $user_id, $db_path]);
+                }
                 error_log("✓ {$type} saved: {$db_path}");
                 return ['success' => true, 'filename' => $filename, 'path' => $db_path, 'type' => $type];
             }

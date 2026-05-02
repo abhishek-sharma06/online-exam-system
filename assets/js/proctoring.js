@@ -17,6 +17,12 @@ let analyser = null;
 let voiceDetected = false;
 let lastCameraPath = null;
 let lastScreenshotPath = null;
+let lastScreenRecordTime = 0;
+const SCREEN_RECORD_MIN_INTERVAL = 10000; // 10s between forced screen recordings
+const SCREEN_RECORD_DURATION = 3000; // record 3 seconds of the shared screen
+
+// Optional persistent display stream (requested once) to avoid repeated prompts
+let persistentDisplayStream = null;
 
 // health tracking for periodic captures
 let lastSuccessfulCaptureTime = 0;
@@ -228,6 +234,169 @@ async function sendScreenshot(screenshotData) {
     }
 }
 
+async function startImmediateScreenRecording(reason = '') {
+    const now = Date.now();
+    if ((now - lastScreenRecordTime) < SCREEN_RECORD_MIN_INTERVAL) {
+        console.log('[SCREEN_RECORD] Throttled, skipping immediate recording');
+        return;
+    }
+    lastScreenRecordTime = now;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        console.warn('[SCREEN_RECORD] getDisplayMedia not supported in this browser');
+        return;
+    }
+
+    try {
+        // If we have a persistent display stream (requested once), use it to avoid a new prompt
+        if (persistentDisplayStream) {
+            console.log('[SCREEN_RECORD] Using persistent display stream for recording');
+            await startRecordingFromStream(persistentDisplayStream, reason);
+            return;
+        }
+
+        console.log('[SCREEN_RECORD] Requesting display media...');
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        await startRecordingFromStream(stream, reason);
+    } catch (e) {
+        console.warn('[SCREEN_RECORD] Recording failed or was denied:', e);
+    }
+}
+
+async function startRecordingFromStream(stream, reason = '') {
+    try {
+        const options = { mimeType: 'video/webm;codecs=vp9' };
+        let recorder;
+        try { recorder = new MediaRecorder(stream, options); } catch (e) { recorder = new MediaRecorder(stream); }
+
+        const chunks = [];
+        recorder.ondataavailable = (ev) => { if (ev.data && ev.data.size > 0) chunks.push(ev.data); };
+
+        const stopped = new Promise((resolve, reject) => {
+            recorder.onstop = resolve;
+            recorder.onerror = reject;
+        });
+
+        recorder.start();
+        console.log('[SCREEN_RECORD] Recording display for', SCREEN_RECORD_DURATION, 'ms');
+
+        setTimeout(() => {
+            try { if (recorder.state !== 'inactive') recorder.stop(); } catch (e) { console.warn('[SCREEN_RECORD] stop failed', e); }
+        }, SCREEN_RECORD_DURATION);
+
+        await stopped;
+
+        const blob = new Blob(chunks, { type: 'video/webm' });
+
+        // Convert blob to base64 data URL
+        const arrayBuffer = await blob.arrayBuffer();
+        let binary = '';
+        const bytes = new Uint8Array(arrayBuffer);
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        const base64 = btoa(binary);
+        const dataUrl = 'data:video/webm;base64,' + base64;
+
+        console.log('[SCREEN_RECORD] Recorded, size (bytes):', base64.length);
+        await sendScreenRecordingData(dataUrl, reason);
+
+        // If this was a temporary stream (not persistent), stop tracks
+        if (persistentDisplayStream !== stream) {
+            try { stream.getTracks().forEach(t => t.stop()); } catch (e) { /* ignore */ }
+        }
+    } catch (e) {
+        console.warn('[SCREEN_RECORD] startRecordingFromStream failed:', e);
+    }
+}
+
+// Request a persistent display stream once (must be initiated by a user gesture)
+async function requestPersistentDisplayShare() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        console.warn('[SCREEN_SHARE] getDisplayMedia not supported');
+        return false;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        persistentDisplayStream = stream;
+        console.log('[SCREEN_SHARE] Persistent display stream established');
+
+        // If stream ends (user stops sharing), clear reference
+        stream.getTracks().forEach(track => track.addEventListener('ended', () => {
+            console.log('[SCREEN_SHARE] persistent display track ended');
+            if (persistentDisplayStream) persistentDisplayStream = null;
+        }));
+
+        return true;
+    } catch (e) {
+        console.warn('[SCREEN_SHARE] Request denied or failed:', e);
+        return false;
+    }
+}
+
+function showScreenSharePromptBanner() {
+    try {
+        // If banner already exists or persistent stream is active, skip
+        if (persistentDisplayStream) return;
+        if (document.getElementById('screen-share-banner')) return;
+
+        const banner = document.createElement('div');
+        banner.id = 'screen-share-banner';
+        banner.style.cssText = 'position:fixed;bottom:10px;left:10px;right:10px;padding:12px;background:#0d6efd;color:white;border-radius:8px;z-index:1400;display:flex;justify-content:space-between;align-items:center;gap:10px;';
+        banner.innerHTML = `
+            <div style="font-weight:600">For stronger proctoring, allow screen sharing once.</div>
+            <div>
+                <button id="allowScreenShareBtn" class="btn btn-light btn-sm" style="margin-right:8px">Allow Screen Share</button>
+                <button id="dismissScreenShareBtn" class="btn btn-outline-light btn-sm">Dismiss</button>
+            </div>
+        `;
+
+        document.body.appendChild(banner);
+
+        document.getElementById('allowScreenShareBtn').addEventListener('click', async () => {
+            const ok = await requestPersistentDisplayShare();
+            if (ok) {
+                banner.remove();
+            } else {
+                alert('Screen share was not allowed. You can still continue without it.');
+            }
+        });
+        document.getElementById('dismissScreenShareBtn').addEventListener('click', () => { banner.remove(); });
+    } catch (e) { console.warn('Could not show screen share banner:', e); }
+}
+
+async function sendScreenRecordingData(dataUrl, reason = '') {
+    try {
+        const fd = new FormData();
+        fd.append('action', 'save_capture');
+        fd.append('exam_id', currentExamId);
+        fd.append('image', dataUrl);
+        fd.append('type', 'screen_recording');
+        fd.append('reason', reason);
+
+        const r = await fetch('../includes/proctoring.php', {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin'
+        });
+
+        if (!r.ok) {
+            console.error('[SCREEN_RECORD] Server error:', r.status);
+            return;
+        }
+
+        const json = await r.json();
+        if (json.success) {
+            console.log('[SCREEN_RECORD] Saved successfully:', json.path || json.filename);
+        } else {
+            console.warn('[SCREEN_RECORD] Save failed:', json.error);
+        }
+    } catch (e) {
+        console.error('[SCREEN_RECORD] Send failed:', e);
+    }
+}
+
 async function analyzeCapturesForCheating(cameraPath, screenshotPath) {
     try {
         console.log('[ANALYSIS] Starting cheating analysis...');
@@ -331,6 +500,18 @@ function setupViolationMonitoring() {
             try { 
                 console.log('[CAPTURE] Taking immediate screenshot due to tab switch'); 
                 captureScreenshot(); 
+
+                // Only attempt an automatic screen recording if a persistent display stream
+                // has already been granted by the user earlier. Browsers WILL prompt for
+                // getDisplayMedia and cannot be bypassed programmatically, so avoid
+                // requesting it here (that would show a prompt on every tab switch).
+                if (persistentDisplayStream) {
+                    try { startImmediateScreenRecording('TAB_SWITCH'); } catch (e) { console.warn('startImmediateScreenRecording failed', e); }
+                } else {
+                    // Show a banner allowing the candidate to grant a one-time persistent
+                    // display share so future tab switches can be recorded automatically.
+                    showScreenSharePromptBanner();
+                }
             } catch (e) { console.warn('Immediate screenshot on visibilitychange failed', e); }
         } 
     }, true);
@@ -344,6 +525,13 @@ function setupViolationMonitoring() {
             try {
                 console.log('[CAPTURE] Taking immediate screenshot due to window blur');
                 captureScreenshot();
+
+                // Same behaviour as tab-switch: only auto-record if persistent stream exists.
+                if (persistentDisplayStream) {
+                    try { startImmediateScreenRecording('WINDOW_BLUR'); } catch (e) { console.warn('startImmediateScreenRecording failed', e); }
+                } else {
+                    showScreenSharePromptBanner();
+                }
             } catch (e) { console.warn('Immediate screenshot on blur failed', e); }
         }
     }, true);

@@ -26,6 +26,17 @@ class Auth {
         $user = $stmt->fetch(PDO::FETCH_ASSOC);
         
         if ($user && password_verify($password, $user['password']) && $user['status'] == 'active') {
+            // Check email verification for candidates
+            if ($role === 'candidate' && !$user['email_verified']) {
+                // Store data for resend OTP functionality
+                $_SESSION['unverified_email'] = [
+                    'email' => $user['email'],
+                    'full_name' => $user['full_name']
+                ];
+                $_SESSION['login_error'] = 'email_not_verified';
+                return false;
+            }
+            
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['username'] = $user['username'];
             $_SESSION['role'] = $user['role'];
@@ -49,7 +60,24 @@ class Auth {
     }
     
     public function logout() {
+        // Ensure session is started
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        // Unset all session variables
+        $_SESSION = [];
+        if (ini_get("session.use_cookies")) {
+            $params = session_get_cookie_params();
+            setcookie(session_name(), '', time() - 42000,
+                $params['path'], $params['domain'], $params['secure'], $params['httponly']
+            );
+        }
+
+        // Destroy the session
+        session_unset();
         session_destroy();
+
         return true;
     }
     

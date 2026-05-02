@@ -2,6 +2,8 @@
 session_start();
 require_once 'includes/functions.php';
 require_once 'includes/auth.php';
+require_once 'includes/email.php';
+require_once 'config/database.php';
 
 if ($auth->isAuthenticated()) {
     if ($auth->isAdmin()) header('Location: admin/dashboard.php');
@@ -10,7 +12,40 @@ if ($auth->isAuthenticated()) {
 }
 
 $error = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+$show_email_verification = false;
+$unverified_email = '';
+$unverified_name = '';
+
+// Handle OTP resend from email verification screen
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'resend_otp') {
+    if (isset($_SESSION['unverified_email'])) {
+        try {
+            $database = new Database();
+            $db = $database->getConnection();
+            
+            // Generate new OTP
+            $new_otp = Email::generateOTP();
+            $new_expires = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+            
+            // Update OTP in database
+            $stmt = $db->prepare("UPDATE users SET otp = ?, otp_expires_at = ? WHERE email = ?");
+            
+            if ($stmt->execute([$new_otp, $new_expires, $_SESSION['unverified_email']['email']])) {
+                // Send new OTP email
+                $emailer = new Email();
+                if ($emailer->sendOTPEmail($_SESSION['unverified_email']['email'], $new_otp, $_SESSION['unverified_email']['full_name'])) {
+                    $error = '✓ A new verification code has been sent to your email!';
+                } else {
+                    $error = 'Failed to send OTP email. Please try again.';
+                }
+            }
+        } catch (PDOException $e) {
+            $error = 'Database error: ' . $e->getMessage();
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     $username = trim($_POST['username']);
     $password = $_POST['password'];
     $role = $_POST['role'];
@@ -20,7 +55,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         else header('Location: candidate/dashboard.php');
         exit;
     } else {
-        $error = 'Invalid username/email or password! Please try again.';
+        if (isset($_SESSION['login_error']) && $_SESSION['login_error'] === 'email_not_verified') {
+            $show_email_verification = true;
+            $unverified_email = $_SESSION['unverified_email']['email'];
+            $unverified_name = $_SESSION['unverified_email']['full_name'];
+            $error = '❌ Please verify your email first to login. Check your email for the verification code.';
+            unset($_SESSION['login_error']);
+        } else {
+            $error = 'Invalid username/email or password! Please try again.';
+        }
     }
 }
 ?>
@@ -73,6 +116,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <i class="fas fa-exclamation-triangle me-2"></i><?php echo $error; ?>
                             </div>
                         <?php endif; ?>
+
+                        <?php if($show_email_verification): ?>
+                            <!-- Email Verification Notice -->
+                            <div class="alert alert-warning" style="background-color: #fff3cd; border-color: #ffeaa7; border-left: 4px solid #f39c12;">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Email Verification Required</strong><br>
+                                <small>Code sent to: <strong><?php echo htmlspecialchars($unverified_email); ?></strong></small>
+                            </div>
+                            
+                            <form method="POST" action="">
+                                <input type="hidden" name="action" value="resend_otp">
+                                <button type="submit" class="btn btn-warning w-100 mb-3">
+                                    <i class="fas fa-envelope me-2"></i>Resend Verification Code
+                                </button>
+                            </form>
+
+                            <div style="text-align: center; color: #666; font-size: 0.9em; margin-bottom: 20px;">
+                                <p>Enter the code from your email, then try logging in again.</p>
+                                <a href="verify_email.php" class="btn btn-link btn-sm">
+                                    <i class="fas fa-arrow-right me-1"></i>Go to Verification Page
+                                </a>
+                            </div>
+
+                            <hr class="my-3">
+                            <p class="text-center text-muted" style="font-size: 0.9em; margin-bottom: 0;">
+                                or try with a different account
+                            </p>
+                        <?php endif; ?>
+
                         <form method="POST">
                             <div class="mb-3 input-icon">
                                 <i class="fas fa-envelope"></i>

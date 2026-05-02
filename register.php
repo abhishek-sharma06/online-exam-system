@@ -1,11 +1,12 @@
 <?php
 // ==========================================
 // FILE: register.php
-// PURPOSE: User registration page
+// PURPOSE: User registration page with OTP verification
 // ==========================================
 
 session_start();
 require_once 'config/database.php';
+require_once 'includes/email.php';
 
 $error = '';
 $success = '';
@@ -58,19 +59,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt->rowCount() > 0) {
                 $error = '❌ Email or username already exists. Please use different credentials.';
             } else {
-                // Insert new user with 'candidate' role
+                // Insert new user with 'candidate' role and email_verified = false
                 $hashed_password = password_hash($password, PASSWORD_BCRYPT);
                 $created_at = date('Y-m-d H:i:s');
                 
+                // Generate OTP
+                $otp = Email::generateOTP();
+                $otp_expires_at = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+                
                 $insert_stmt = $db->prepare("
-                    INSERT INTO users (full_name, email, username, password, role, status, created_at)
-                    VALUES (?, ?, ?, ?, 'candidate', 'active', ?)
+                    INSERT INTO users (full_name, email, username, password, otp, otp_expires_at, 
+                                      email_verified, role, status, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, FALSE, 'candidate', 'active', ?)
                 ");
                 
-                if ($insert_stmt->execute([$full_name, $email, $username, $hashed_password, $created_at])) {
-                    $success = '✓ Registration successful! Redirecting to login...';
-                    // Redirect to login after 2 seconds
-                    header('Refresh: 2; url=login.php');
+                if ($insert_stmt->execute([$full_name, $email, $username, $hashed_password, $otp, $otp_expires_at, $created_at])) {
+                    // Send OTP email
+                    $emailer = new Email();
+                    if ($emailer->sendOTPEmail($email, $otp, $full_name)) {
+                        // Store registration data in session for verification page
+                        $_SESSION['pending_verification'] = [
+                            'email' => $email,
+                            'full_name' => $full_name,
+                            'username' => $username
+                        ];
+                        
+                        $success = '✓ Registration successful! Redirecting to email verification...';
+                        header('Refresh: 2; url=verify_email.php');
+                    } else {
+                        $error = '❌ Registration successful but failed to send verification email. Please try again or contact support.';
+                    }
                 } else {
                     $error = '❌ Registration failed. Please try again.';
                 }
