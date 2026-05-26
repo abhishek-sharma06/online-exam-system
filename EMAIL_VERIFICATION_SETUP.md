@@ -40,7 +40,7 @@ This will install PHPMailer and create `vendor/` directory with autoloader.
 Edit `config/phpmailer.php`:
 
 ```php
-define('SENDGRID_API_KEY', '.YOUR_API_KEY_HERE'); // Your SendGrid API key
+define('SENDGRID_API_KEY', ''); // Your SendGrid API key
 define('SENDER_EMAIL', 'your-email@yourdomain.com'); // Your sender email
 define('VERIFICATION_URL', 'https://yourdomain.com/verify.php'); // Your verification URL
 define('TOKEN_EXPIRY_MINUTES', 15); // Token expiration time
