@@ -1,3 +1,4 @@
 .env
 assets/uploads/
 *.log
+EMAIL_VERIFICATION_SETUP.md
