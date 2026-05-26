@@ -21,6 +21,25 @@ let lastScreenRecordTime = 0;
 const SCREEN_RECORD_MIN_INTERVAL = 10000; // 10s between forced screen recordings
 const SCREEN_RECORD_DURATION = 3000; // record 3 seconds of the shared screen
 
+// --- AI Suspicion Score ---
+let suspicionScore = 0;
+const VIOLATION_WEIGHTS = {
+    'TAB_SWITCH': 15,
+    'WINDOW_BLUR': 5,
+    'COPY_ATTEMPT': 10,
+    'PASTE_ATTEMPT': 10,
+    'DEV_TOOLS': 20,
+    'FULLSCREEN_EXIT': 5,
+    'NAVIGATION_ATTEMPT': 10,
+    'MULTIPLE_FACES': 20,
+    'NO_FACE_DETECTED': 8,
+    'UNAUTHORIZED_DEVICE': 25,
+    'OFF_SCREEN_FOCUS': 8,
+    'LOW_LIGHT': 3,
+    'SUSPICIOUS_AUDIO': 15,
+    'RIGHT_CLICK': 2
+};
+
 // Optional persistent display stream (requested once) to avoid repeated prompts
 let persistentDisplayStream = null;
 
@@ -72,6 +91,12 @@ async function initProctoring(examId, userId) {
         try { startCaptureHealthCheck(); } catch (e) { console.warn('startCaptureHealthCheck failed', e); }
         startPeriodicAnalysis();
         setupHeartbeat();
+        
+        // Initialize AI proctoring if script is loaded
+        if (typeof initAIProctoring === 'function') {
+            initAIProctoring();
+        }
+        
         return true;
     } catch (e) {
         console.warn('getUserMedia denied or failed, continuing without camera', e);
@@ -437,23 +462,54 @@ function setupVoiceDetection() {
     try {
         if (!analyser) return;
         
+        // Use larger FFT for better frequency resolution
+        analyser.fftSize = 2048;
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let voiceStartTime = null;
+        // Only trigger a violation after sustained voice for 3 seconds
+        const SUSTAINED_MS = 3000;
+        
         const checkVoice = () => {
             analyser.getByteFrequencyData(dataArray);
             
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
+            // Human voice sits primarily in 85Hz - 3000Hz range.
+            // At 44100Hz with fftSize 2048, bin width = ~21.5Hz.
+            // Voice range: bin 4 (~86Hz) to bin 140 (~3010Hz)
+            let voiceSum = 0;
+            const voiceStart = 4;
+            const voiceEnd = 140;
+            for (let i = voiceStart; i < voiceEnd; i++) {
+                voiceSum += dataArray[i];
             }
-            const average = sum / dataArray.length;
+            const voiceAvg = voiceSum / (voiceEnd - voiceStart);
             
-            if (average > 30) { // Threshold for voice detection
+            if (voiceAvg > 20) {
                 if (!voiceDetected) {
-                    console.log('[VOICE] Voice activity detected');
+                    console.log('[VOICE] Voice activity detected, avg:', voiceAvg.toFixed(1));
                     voiceDetected = true;
+                    voiceStartTime = Date.now();
+                }
+                // Update audio indicator dot to green/pulsing
+                const dot = document.getElementById('audio-indicator');
+                const lbl = document.getElementById('audio-label');
+                if (dot) { dot.style.background = '#28a745'; dot.classList.add('active'); }
+                if (lbl) { lbl.textContent = '🎙️ Audio detected'; lbl.style.color = '#28a745'; }
+                // Fire a violation only if sustained for threshold duration
+                if (voiceStartTime && (Date.now() - voiceStartTime) > SUSTAINED_MS) {
+                    if (!isDisqualified) {
+                        recordViolation('SUSPICIOUS_AUDIO', 'Sustained background voice or conversation detected');
+                    }
+                    // Reset timer so we don't fire every frame after the threshold
+                    voiceStartTime = Date.now();
                 }
             } else {
                 voiceDetected = false;
+                voiceStartTime = null;
+                // Update audio indicator dot to grey/silent
+                const dot = document.getElementById('audio-indicator');
+                const lbl = document.getElementById('audio-label');
+                if (dot) { dot.style.background = '#adb5bd'; dot.classList.remove('active'); }
+                if (lbl) { lbl.textContent = 'Microphone monitoring active'; lbl.style.color = '#6c757d'; }
             }
             
             requestAnimationFrame(checkVoice);
@@ -462,6 +518,33 @@ function setupVoiceDetection() {
     } catch (e) {
         console.warn('[VOICE] Setup failed:', e);
     }
+}
+
+function updateSuspicionScore(violationType) {
+    const weight = VIOLATION_WEIGHTS[violationType] || 5;
+    suspicionScore = Math.min(100, suspicionScore + weight);
+    updateSuspicionDisplay(suspicionScore);
+}
+
+function updateSuspicionDisplay(score) {
+    const bar = document.getElementById('suspicion-score-bar');
+    const label = document.getElementById('suspicion-score-label');
+    const badge = document.getElementById('suspicion-score-badge');
+    if (!bar || !label || !badge) return;
+    
+    bar.style.width = score + '%';
+    label.textContent = score + '%';
+    
+    let color, risk, textColor;
+    if (score < 20)       { color = '#28a745'; risk = '✅ Low Risk';     textColor = 'white'; }
+    else if (score < 50)  { color = '#ffc107'; risk = '⚠️ Medium Risk';  textColor = 'black'; }
+    else if (score < 75)  { color = '#fd7e14'; risk = '🔴 High Risk';    textColor = 'white'; }
+    else                  { color = '#dc3545'; risk = '🚨 CRITICAL';     textColor = 'white'; }
+    
+    bar.style.background = color;
+    badge.textContent = risk;
+    badge.style.background = color;
+    badge.style.color = textColor;
 }
 
 function showSuspicionWarning(report) {
@@ -684,6 +767,7 @@ async function recordViolation(type, description = '') {
         
         updateViolationDisplay(violationCount);
         showViolationWarning(type, violationCount);
+        updateSuspicionScore(type);
 
         if (json.disqualified) { 
             console.error(`[VIOLATION] USER DISQUALIFIED!`);

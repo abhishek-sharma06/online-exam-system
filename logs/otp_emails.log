@@ -14,3 +14,41 @@
     "timestamp": "2026-05-02 20:24:12"
 }
 ==================================================
+{
+    "to": "abhisheksharmam6@gmail.com",
+    "subject": "Email Verification - ExamSystem Pro",
+    "timestamp": "2026-05-03 10:22:19",
+    "smtp_error": "535-5.7.8 Username and Password not accepted. For more information, go to\r\n535 5.7.8  https:\/\/support.google.com\/mail\/?p=BadCredentials d2e1a72fcca58-83515ad0183sm8883336b3a.31 - gsmtp",
+    "last_error": "SMTP send failed: 535-5.7.8 Username and Password not accepted. For more information, go to\r\n535 5.7.8  https:\/\/support.google.com\/mail\/?p=BadCredentials d2e1a72fcca58-83515ad0183sm8883336b3a.31 - gsmtp",
+    "otp": "763877",
+    "user": "Test User"
+}
+==================================================
+{
+    "to": "abhisheksharmam6@gmail.com",
+    "subject": "Email Verification - ExamSystem Pro",
+    "timestamp": "2026-05-03 10:24:25",
+    "smtp_error": "535-5.7.8 Username and Password not accepted. For more information, go to\r\n535 5.7.8  https:\/\/support.google.com\/mail\/?p=BadCredentials 41be03b00d2f7-c7ffbba635dsm6404086a12.3 - gsmtp",
+    "last_error": "SMTP send failed: 535-5.7.8 Username and Password not accepted. For more information, go to\r\n535 5.7.8  https:\/\/support.google.com\/mail\/?p=BadCredentials 41be03b00d2f7-c7ffbba635dsm6404086a12.3 - gsmtp",
+    "otp": "123456",
+    "user": "Test User"
+}
+==================================================
+{
+    "to": "abhisheksharmam003@gmail.com",
+    "subject": "Email Verification - ExamSystem Pro",
+    "timestamp": "2026-05-03 10:48:54",
+    "smtp_error": "535-5.7.8 Username and Password not accepted. For more information, go to\r\n535 5.7.8  https:\/\/support.google.com\/mail\/?p=BadCredentials d9443c01a7336-2b9caa7e80bsm70915395ad.8 - gsmtp",
+    "last_error": "SMTP send failed: 535-5.7.8 Username and Password not accepted. For more information, go to\r\n535 5.7.8  https:\/\/support.google.com\/mail\/?p=BadCredentials d9443c01a7336-2b9caa7e80bsm70915395ad.8 - gsmtp",
+    "otp": "210499",
+    "user": "Test User"
+}
+==================================================
+{
+    "to": "bandy@gmail.com",
+    "subject": "Your OTP - ExamSystem Pro",
+    "otp": "099854",
+    "user": "abhi",
+    "timestamp": "2026-05-11 19:56:21"
+}
+==================================================

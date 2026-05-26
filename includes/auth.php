@@ -28,7 +28,7 @@ class Auth {
         if ($user && password_verify($password, $user['password']) && $user['status'] == 'active') {
             // Check email verification for candidates
             if ($role === 'candidate' && !$user['email_verified']) {
-                // Store data for resend OTP functionality
+                // Store data for error message
                 $_SESSION['unverified_email'] = [
                     'email' => $user['email'],
                     'full_name' => $user['full_name']

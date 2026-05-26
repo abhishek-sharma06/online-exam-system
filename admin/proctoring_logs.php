@@ -140,6 +140,12 @@ try {
         .violation-DEV_TOOLS { background-color: #c92a2a; color: white; }
         .violation-FULLSCREEN_EXIT { background-color: #ff922b; color: white; }
         .violation-NAVIGATION_ATTEMPT { background-color: #a61e4d; color: white; }
+        .violation-MULTIPLE_FACES { background-color: #800080; color: white; }
+        .violation-NO_FACE_DETECTED { background-color: #000000; color: white; }
+        .violation-UNAUTHORIZED_DEVICE { background-color: #d63031; color: white; }
+        .violation-OFF_SCREEN_FOCUS { background-color: #0984e3; color: white; }
+        .violation-LOW_LIGHT { background-color: #636e72; color: white; }
+        .violation-SUSPICIOUS_AUDIO { background-color: #e67e22; color: white; }
     </style>
 </head>
 <body style="background: #f0f2f5;">

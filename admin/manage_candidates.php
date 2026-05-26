@@ -35,7 +35,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     if ($action === 'delete') {
         try {
-            // perform safe cascade delete within transaction
+            // Find the user email/username before deletion for extra cleanup
+            $stmt = $db->prepare("SELECT email, username FROM users WHERE id = ? AND role = 'candidate'");
+            $stmt->execute([$user_id]);
+            $candidate = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if (!$candidate) {
+                header("Location: manage_candidates.php?msg=not_deleted");
+                exit();
+            }
+
             $db->beginTransaction();
 
             // 1) proctoring_logs
@@ -80,10 +89,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $stmt = $db->prepare("DELETE FROM exam_attempts WHERE user_id = ?");
             $stmt->execute([$user_id]);
 
-            // 7) finally delete user (only if candidate)
+            // 7) delete the candidate user row
             $stmt = $db->prepare("DELETE FROM users WHERE id = ? AND role = 'candidate'");
             $stmt->execute([$user_id]);
             $deleted = $stmt->rowCount();
+
+            // 8) extra cleanup: remove any remaining candidate records with the same email or username
+            if ($deleted > 0) {
+                $cleanup = $db->prepare("DELETE FROM users WHERE role = 'candidate' AND (email = ? OR username = ?)");
+                $cleanup->execute([$candidate['email'], $candidate['username']]);
+            }
 
             if ($deleted > 0) {
                 $db->commit();

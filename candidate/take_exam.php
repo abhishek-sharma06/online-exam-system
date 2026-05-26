@@ -108,37 +108,96 @@ if (!isset($_SESSION['exam_started']) || $_SESSION['exam_id'] != $exam_id) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .timer { position: fixed; top: 20px; right: 20px; background: red; color: white; padding: 10px 20px; border-radius: 5px; font-size: 24px; font-weight: bold; z-index: 1000; }
-        .webcam-preview { position: fixed; bottom: 20px; right: 20px; width: 200px; height: 150px; border: 2px solid blue; border-radius: 10px; background: black; z-index: 1000; overflow: hidden; }
-        .webcam-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .webcam-preview { position: sticky; top: 20px; width: 100%; border: 3px solid #3a0ca3; border-radius: 10px; background: black; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .webcam-preview video { width: 100%; height: auto; object-fit: cover; transform: scaleX(-1); display: block; }
         .question-card { background: white; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         body { background: #f0f2f5; font-family: Arial; }
         @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0.3; } }
         @keyframes slideDown { from { transform: translateX(-50%) translateY(-100px); opacity: 0; } to { transform: translateX(-50%) translateY(0); opacity: 1; } }
         .blink { animation: blink 0.7s infinite; }
+        #candidate-warnings .alert { margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        /* Suspicion score card */
+        #suspicion-score-card { border: none; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.12); overflow: hidden; }
+        #suspicion-score-bar { transition: width 0.6s cubic-bezier(0.4,0,0.2,1), background 0.6s ease; }
+        /* Live audio indicator */
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        #audio-indicator.active { animation: pulse 1s infinite; }
     </style>
 </head>
 <body oncontextmenu="return false">
 <div class="timer" id="timer"></div>
-<div class="webcam-preview"><video id="webcam" autoplay playsinline muted></video></div>
 <div id="violation-indicator"></div>
 
-<div class="container mt-4">
-    <h2><?php echo htmlspecialchars($exam['title']); ?></h2>
-    <form method="POST" action="submit_exam.php" id="examForm">
-        <input type="hidden" name="exam_id" value="<?php echo $exam_id; ?>">
-        <input type="hidden" id="current_index" name="current_index" value="0">
-        <div id="question_container"></div>
-        <div class="d-flex gap-2">
-            <button type="button" id="prevBtn" class="btn btn-secondary">Previous</button>
-            <button type="button" id="nextBtn" class="btn btn-primary">Next</button>
-            <button type="submit" id="submitBtn" class="btn btn-success ms-auto">Submit Exam</button>
+<div class="container-fluid mt-4" style="max-width: 1400px;">
+    <div class="row">
+        <!-- Main Exam Column -->
+        <div class="col-md-8">
+            <h2><?php echo htmlspecialchars($exam['title']); ?></h2>
+            <form method="POST" action="submit_exam.php" id="examForm">
+                <input type="hidden" name="exam_id" value="<?php echo $exam_id; ?>">
+                <input type="hidden" id="current_index" name="current_index" value="0">
+                <div id="question_container"></div>
+                <div class="d-flex gap-2">
+                    <button type="button" id="prevBtn" class="btn btn-secondary">Previous</button>
+                    <button type="button" id="nextBtn" class="btn btn-primary">Next</button>
+                    <button type="submit" id="submitBtn" class="btn btn-success ms-auto">Submit Exam</button>
+                </div>
+            </form>
         </div>
-    </form>
-    <div id="candidate-warnings" style="position:fixed;left:20px;bottom:20px;z-index:1200;width:300px;"></div>
+        
+        <!-- Webcam & Warnings Column -->
+        <div class="col-md-4">
+            <!-- Webcam feed -->
+            <div class="webcam-preview mb-2">
+                <video id="webcam" autoplay playsinline muted></video>
+            </div>
+
+            <!-- Live Audio Indicator -->
+            <div class="d-flex align-items-center gap-2 mb-3 px-1">
+                <span id="audio-indicator" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#adb5bd;"></span>
+                <small id="audio-label" style="color:#6c757d;font-size:12px;">Microphone monitoring active</small>
+            </div>
+
+            <!-- AI Suspicion Risk Score -->
+            <div class="card mb-3" id="suspicion-score-card">
+                <div class="card-header py-2" style="background:linear-gradient(135deg,#3a0ca3,#4361ee);color:white;font-size:13px;font-weight:bold;">
+                    🧠 AI Suspicion Score
+                </div>
+                <div class="card-body py-3 px-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small style="font-weight:600;color:#333;">Risk Level</small>
+                        <span id="suspicion-score-badge" style="padding:3px 10px;border-radius:20px;font-size:11px;font-weight:bold;background:#28a745;color:white;">✅ Low Risk</span>
+                    </div>
+                    <div style="background:#e9ecef;border-radius:20px;height:14px;overflow:hidden;">
+                        <div id="suspicion-score-bar" style="height:100%;width:0%;background:#28a745;border-radius:20px;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between mt-1">
+                        <small style="color:#aaa;font-size:10px;">0%</small>
+                        <small id="suspicion-score-label" style="font-weight:bold;color:#333;font-size:12px;">0%</small>
+                        <small style="color:#aaa;font-size:10px;">100%</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proctoring Status Warnings -->
+            <h6 class="mb-2" style="font-weight:600;">🛡️ Proctoring Status</h6>
+            <div id="candidate-warnings">
+                <!-- Warnings appear here -->
+            </div>
+        </div>
+    </div>
 </div>
+
+    <!-- TensorFlow.js core and backend -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <!-- COCO-SSD object detection model -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <!-- face-api.js for face/gaze tracking -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.min.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="../assets/js/proctoring.js"></script>
+    <script src="../assets/js/ai_proctoring.js"></script>
 <script>
     // Initialize proctoring system
     document.addEventListener('DOMContentLoaded', async () => {

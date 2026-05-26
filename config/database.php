@@ -10,10 +10,24 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 class Database {
+    // ==========================================
+    // LOCALHOST CONFIGURATION (Default)
+    // ==========================================
     private $host = "localhost";
     private $db_name = "exam_system";
     private $username = "root";
     private $password = "";
+
+    // ==========================================
+    // LIVE HOSTING CONFIGURATION (Uncomment and update for production)
+    // ==========================================
+    /*
+    private $host = "your-live-host.com";  // e.g., sql109.infinityfree.com or your hosting provider's MySQL host
+    private $db_name = "your_database_name";  // Database name provided by hosting
+    private $username = "your_db_username";  // Database username provided by hosting
+    private $password = "your_db_password";  // Database password provided by hosting
+    */
+
     public $conn;
 
     public function getConnection() {
