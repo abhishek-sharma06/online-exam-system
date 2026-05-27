@@ -14,7 +14,7 @@ define('SENDGRID_USERNAME', 'apikey');
 define('SENDGRID_API_KEY', ''); // Replace with your SendGrid API key
 
 // Email Configuration
-define('SENDER_EMAIL', 'abhisheksharmam6@gmail.com'); // Change to your domain
+define('SENDER_EMAIL', ' '); // Change to your domain
 define('SENDER_NAME', 'ExamSystem Pro');
 
 // Verification Settings
