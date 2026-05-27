@@ -11,7 +11,7 @@
 define('SENDGRID_HOST', 'smtp.sendgrid.net');
 define('SENDGRID_PORT', 587);
 define('SENDGRID_USERNAME', 'apikey');
-define('SENDGRID_API_KEY', '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'); // Replace with your SendGrid API key
+define('SENDGRID_API_KEY', ''); // Replace with your SendGrid API key
 
 // Email Configuration
 define('SENDER_EMAIL', 'abhisheksharmam6@gmail.com'); // Change to your domain
