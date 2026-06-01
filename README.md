@@ -3,7 +3,7 @@ monitors candidates by recording violations and disqualifies if done
 
 # Exam System — Simple Guide
 
-This is a small website to give and take online exams. It is written in PHP and made to run on a local server like XAMPP. This guide uses very easy words so anyone can understand — even a 5th grader.
+This is a small website to give and take online exams. It is written in PHP and made to run on a local server like XAMPP.
 
 ## What is it?
 - A place where teachers (admins) make tests.
@@ -52,9 +52,5 @@ This is a small website to give and take online exams. It is written in PHP and 
 - If pages show errors, make sure Apache and MySQL are running.
 - Make sure the project folder is in `htdocs`.
 - If the database is missing, re-run `setup_database.php`.
-
-## Want help?
-If you want, I can add pictures, short videos, or make the steps even simpler. Tell me what you want next.
-
 ---
 _File created for simple learning and quick setup._
